@@ -61,7 +61,9 @@ export default function Home() {
   const handleDeleteChat = async (chatId: string) => {
     try {
       await db.deleteChat(chatId);
+      // Update allMessages by removing deleted chat messages
       setAllMessages(prev => prev.filter(m => m.chatId !== chatId));
+      // Clear current chat if it was deleted
       if (currentChatId === chatId) {
         setMessages([]);
         setCurrentChatId(undefined);
@@ -81,10 +83,20 @@ export default function Home() {
 
   const handleLoadChat = async (chatId: string) => {
     try {
+      // Load messages for selected chat
       const chatMessages = await db.getMessagesByChat(chatId);
-      setMessages(chatMessages);
-      setCurrentChatId(chatId);
+      if (chatMessages.length > 0) {
+        setMessages(chatMessages);
+        setCurrentChatId(chatId);
+      } else {
+        toast({
+          title: "Error",
+          description: "No messages found for this chat",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
+      console.error('Error loading chat:', error);
       toast({
         title: "Error",
         description: "Failed to load chat",
@@ -139,7 +151,7 @@ export default function Home() {
               onChatCreated={handleChatCreated}
               setMessages={(newMessages) => {
                 setMessages(newMessages);
-                // Only update allMessages when newMessages is an array
+                // Update allMessages when newMessages is an array
                 if (Array.isArray(newMessages)) {
                   setAllMessages(prev => [
                     ...prev.filter(m => m.chatId !== currentChatId), 
