@@ -9,7 +9,7 @@ import { db } from '@/lib/db';
 import { GroqClient } from '@/lib/groq';
 import { ReasonerView } from '@/components/reasoner-view';
 import ReactMarkdown from 'react-markdown';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Tooltip,
   TooltipContent,
@@ -31,6 +31,19 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollAreaRef.current) {
+      const scrollElement = scrollAreaRef.current;
+      scrollElement.scrollTop = scrollElement.scrollHeight;
+    }
+  }, []);
+
+  // Auto-scroll when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,7 +272,7 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 p-4">
+      <div ref={scrollAreaRef} className="flex-1 p-4 overflow-y-auto">
         {messages.map((message) => (
           <Card 
             key={message.timestamp} 
@@ -312,7 +325,7 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
             </CardContent>
           </Card>
         ))}
-      </ScrollArea>
+      </div>
 
       <form onSubmit={handleSubmit} className="p-4 border-t">
         <div className="flex gap-2">
