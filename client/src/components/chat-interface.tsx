@@ -89,7 +89,7 @@ export function ChatInterface() {
         // Stream in the analysis
         const analysis = await groq.getReasonerAnalysis(input, reasoner, (content) => {
           setMessages(prev => {
-            const index = prev.findIndex(m => 
+            const index = prev.findIndex(m =>
               m.timestamp === analysisMessage.timestamp
             );
             if (index === -1) return prev;
@@ -148,7 +148,14 @@ export function ChatInterface() {
       // Save all messages to the database
       for (const msg of messages) {
         if (msg.isComplete !== false) {
-          await db.addMessage(msg);
+          try {
+            await db.addMessage({
+              ...msg,
+              timestamp: msg.timestamp || Date.now()
+            });
+          } catch (error) {
+            console.error('Error saving message:', error);
+          }
         }
       }
 

@@ -8,6 +8,7 @@ export interface ChatMessage {
   content: string;
   reasoning_content?: string;
   timestamp: number;
+  id?: string;
 }
 
 export interface Reasoner {
@@ -23,7 +24,7 @@ class Database {
     if (this.initialized) return;
 
     return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('chatbot_db', 1);
+      const request = indexedDB.open('chatbot_db', 2); // Bump version to trigger upgrade
 
       request.onerror = () => reject(request.error);
 
@@ -40,10 +41,16 @@ class Database {
           db.createObjectStore('settings');
         }
 
-        if (!db.objectStoreNames.contains('messages')) {
-          const messagesStore = db.createObjectStore('messages', { keyPath: 'timestamp' });
-          messagesStore.createIndex('by_timestamp', 'timestamp');
+        // Recreate messages store with composite key
+        if (db.objectStoreNames.contains('messages')) {
+          db.deleteObjectStore('messages');
         }
+
+        const messagesStore = db.createObjectStore('messages', { 
+          keyPath: 'id',
+          autoIncrement: true 
+        });
+        messagesStore.createIndex('by_timestamp', 'timestamp');
       };
     });
   }
@@ -83,7 +90,8 @@ class Database {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction('messages', 'readonly');
       const store = transaction.objectStore('messages');
-      const request = store.getAll();
+      const index = store.index('by_timestamp');
+      const request = index.getAll();
 
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -96,6 +104,18 @@ class Database {
       const transaction = this.db!.transaction('messages', 'readwrite');
       const store = transaction.objectStore('messages');
       const request = store.add(message);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async clearMessages(): Promise<void> {
+    await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction('messages', 'readwrite');
+      const store = transaction.objectStore('messages');
+      const request = store.clear();
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
