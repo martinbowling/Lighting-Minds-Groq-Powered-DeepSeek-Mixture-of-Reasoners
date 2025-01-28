@@ -71,9 +71,15 @@ export default function Home() {
               messages={messages} 
               setMessages={(newMessages) => {
                 setMessages(newMessages);
-                setAllMessages(prev => [...prev, ...newMessages.filter(
-                  msg => !prev.some(p => p.timestamp === msg.timestamp)
-                )]);
+                // Only update allMessages when newMessages is an array
+                if (Array.isArray(newMessages)) {
+                  setAllMessages(prev => [
+                    ...prev, 
+                    ...newMessages.filter(msg => 
+                      !prev.some(p => p.timestamp === msg.timestamp)
+                    )
+                  ]);
+                }
               }} 
             />
           </Card>
