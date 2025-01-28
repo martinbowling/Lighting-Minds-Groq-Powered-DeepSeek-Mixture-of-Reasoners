@@ -66,7 +66,7 @@ export default function Home() {
             </Dialog>
           </header>
 
-          <Card className="flex-1 bg-background border">
+          <Card className="flex-1 bg-background border overflow-hidden">
             <ChatInterface 
               messages={messages} 
               setMessages={(newMessages) => {

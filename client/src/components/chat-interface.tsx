@@ -272,7 +272,7 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
         </Button>
       </div>
 
-      <div ref={scrollAreaRef} className="flex-1 p-4 overflow-y-auto h-[calc(100vh-200px)]">
+      <div ref={scrollAreaRef} className="flex-1 p-4 overflow-y-auto">
         {messages.map((message) => (
           <Card 
             key={message.timestamp} 
@@ -327,7 +327,7 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
         ))}
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 border-t">
+      <form onSubmit={handleSubmit} className="p-4 border-t fixed bottom-0 left-0 w-full">
         <div className="flex gap-2">
           <Input
             value={input}
