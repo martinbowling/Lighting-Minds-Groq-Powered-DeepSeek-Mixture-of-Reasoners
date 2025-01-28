@@ -51,30 +51,71 @@ export function ChatInterface() {
       await db.addMessage(userMessage);
       setMessages(prev => [...prev, userMessage]);
 
-      // Add status message
-      const statusMessage: ChatMessage = {
+      // Add status message for reasoners
+      const reasonerStatusMsg: ChatMessage = {
         role: 'assistant',
-        content: '🔍 Analyzing from multiple perspectives...',
+        content: '🔍 Identifying perspectives...',
         timestamp: Date.now()
       };
-      setMessages(prev => [...prev, statusMessage]);
+      setMessages(prev => [...prev, reasonerStatusMsg]);
 
-      // Get reasoners
-      const reasoners = await groq.getReasoners(input);
+      // Get reasoners with streaming updates
+      const reasonerList = await groq.getReasoners(input, (content) => {
+        setMessages(prev => [
+          ...prev.slice(0, -1),
+          { ...reasonerStatusMsg, content: `🔍 Identifying perspectives...\n${content}` }
+        ]);
+      });
 
-      // Get analysis from each reasoner
-      const analyses = await Promise.all(
-        reasoners.map(async (reasoner) => ({
+      // Collect analyses with streaming updates
+      const analyses = [];
+      for (const reasoner of reasonerList) {
+        const analysisMsg: ChatMessage = {
+          role: 'assistant',
+          content: `💭 Getting ${reasoner.emoji} ${reasoner.name}'s analysis...`,
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev.slice(0, -1), analysisMsg]);
+
+        const analysis = await groq.getReasonerAnalysis(input, reasoner, (content) => {
+          setMessages(prev => [
+            ...prev.slice(0, -1),
+            {
+              ...analysisMsg,
+              content: `### ${reasoner.emoji} ${reasoner.name}'s Analysis\n\n${content}`
+            }
+          ]);
+        });
+
+        analyses.push({
           reasoner,
-          analysis: await groq.getReasonerAnalysis(input, reasoner)
-        }))
-      );
+          analysis
+        });
+      }
 
-      // Get synthesis
-      const synthesis = await groq.synthesizeResponses(input, analyses);
+      // Get synthesis with streaming updates
+      const synthesisMsg: ChatMessage = {
+        role: 'assistant',
+        content: '🌟 Creating integrated synthesis...',
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev.slice(0, -1), synthesisMsg]);
 
-      // Replace status message with final response
-      const assistantMessage: ChatMessage = {
+      const synthesis = await groq.synthesizeResponses(input, analyses, (content) => {
+        setMessages(prev => [
+          ...prev.slice(0, -1),
+          {
+            ...synthesisMsg,
+            content: content,
+            reasoning_content: analyses.map(a =>
+              `### ${a.reasoner.emoji} ${a.reasoner.name}\n\n${a.analysis}`
+            ).join('\n\n')
+          }
+        ]);
+      });
+
+      // Save final message
+      const finalMessage: ChatMessage = {
         role: 'assistant',
         content: synthesis,
         reasoning_content: analyses.map(a =>
@@ -82,9 +123,7 @@ export function ChatInterface() {
         ).join('\n\n'),
         timestamp: Date.now()
       };
-
-      await db.addMessage(assistantMessage);
-      setMessages(prev => [...prev.slice(0, -1), assistantMessage]);
+      await db.addMessage(finalMessage);
       setInput('');
 
     } catch (error) {
