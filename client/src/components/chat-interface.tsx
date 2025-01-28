@@ -16,6 +16,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface StreamingMessage extends ChatMessage {
   isComplete?: boolean;
@@ -63,7 +64,7 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
       // Add initial status message
       const statusMessage: StreamingMessage = {
         role: 'assistant',
-        content: '🔍 Identifying perspectives...',
+        content: '🔍 Analyzing your question...',
         timestamp: Date.now()
       };
       setMessages(prev => [...prev, statusMessage]);
@@ -72,12 +73,23 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
       const reasonerList = await groq.getReasoners(input, (content) => {
         setMessages(prev => [
           ...prev.slice(0, -1),
-          { ...statusMessage, content: `Identifying perspectives...\n${content}` }
+          { 
+            ...statusMessage, 
+            content: '🔍 Choosing perspectives...\n\n' + content
+          }
         ]);
       });
 
-      // Remove the status message
-      setMessages(prev => prev.slice(0, -1));
+      // Update status to show chosen perspectives
+      setMessages(prev => [
+        ...prev.slice(0, -1),
+        {
+          ...statusMessage,
+          content: '✨ Perspectives chosen:\n\n' + reasonerList.map(
+            r => `${r.emoji} ${r.name}`
+          ).join('\n')
+        }
+      ]);
 
       // Process each perspective
       const analyses: Array<{ reasoner: Reasoner; analysis: string }> = [];
@@ -249,8 +261,17 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
 
       <ScrollArea className="flex-1 p-4">
         {messages.map((message) => (
-          <Card key={message.timestamp} className="mb-4 relative group">
-            <CardContent className="p-4">
+          <Card 
+            key={message.timestamp} 
+            className={cn(
+              "mb-4 relative group max-w-[80%]",
+              message.role === 'user' ? 'ml-auto' : 'mr-auto'
+            )}
+          >
+            <CardContent className={cn(
+              "p-4",
+              message.role === 'user' ? 'bg-primary/10' : 'bg-muted'
+            )}>
               <div className="font-semibold mb-2 flex justify-between items-center">
                 <span>{message.role === 'user' ? '👤 You' : '🤖 Assistant'}</span>
                 <TooltipProvider>

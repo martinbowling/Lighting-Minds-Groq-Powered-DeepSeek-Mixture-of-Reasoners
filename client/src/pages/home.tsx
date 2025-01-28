@@ -15,13 +15,17 @@ import { db, type ChatMessage } from '@/lib/db';
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
-    db.getMessages().then(setMessages);
+    // Load all messages initially
+    db.getMessages().then((msgs) => {
+      setAllMessages(msgs);
+      setMessages(msgs);
+    });
   }, []);
 
   const handleNewChat = async () => {
-    await db.clearMessages();
     setMessages([]);
   };
 
@@ -32,7 +36,7 @@ export default function Home() {
   return (
     <div className="h-screen bg-background">
       <ChatSidebar
-        messages={messages}
+        messages={allMessages}
         onNewChat={handleNewChat}
         onLoadChat={handleLoadChat}
         className="hidden md:block"
@@ -63,7 +67,15 @@ export default function Home() {
           </header>
 
           <Card className="flex-1 bg-background border">
-            <ChatInterface messages={messages} setMessages={setMessages} />
+            <ChatInterface 
+              messages={messages} 
+              setMessages={(newMessages) => {
+                setMessages(newMessages);
+                setAllMessages(prev => [...prev, ...newMessages.filter(
+                  msg => !prev.some(p => p.timestamp === msg.timestamp)
+                )]);
+              }} 
+            />
           </Card>
         </div>
       </main>
