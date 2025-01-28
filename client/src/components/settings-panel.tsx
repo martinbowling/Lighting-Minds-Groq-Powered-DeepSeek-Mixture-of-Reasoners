@@ -10,7 +10,7 @@ import { db, type Settings } from '@/lib/db';
 export function SettingsPanel() {
   const [settings, setSettings] = useState<Settings>({
     apiKey: '',
-    apiUrl: 'https://api.groq.com/v1/chat/completions',
+    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
     showReasoningContent: false
   });
   const { toast } = useToast();

@@ -59,7 +59,7 @@ class Database {
       request.onsuccess = () => {
         resolve(request.result || {
           apiKey: '',
-          apiUrl: 'https://api.groq.com/v1/chat/completions',
+          apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
           showReasoningContent: false
         });
       };
