@@ -11,7 +11,10 @@ export class GroqClient {
   private client: GroqSDK;
 
   constructor(private config: GroqConfig) {
-    this.client = new GroqSDK({ apiKey: this.config.apiKey });
+    this.client = new GroqSDK({ 
+      apiKey: this.config.apiKey,
+      dangerouslyAllowBrowser: true // Required for browser environment
+    });
   }
 
   async getReasoners(message: string, onUpdate?: StreamCallback): Promise<Reasoner[]> {
