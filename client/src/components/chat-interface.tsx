@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ChatMessage } from '@/lib/db';
 import { db } from '@/lib/db';
 import { GroqClient } from '@/lib/groq';
-import { ReasonerView } from './reasoner-view';
+import { ReasonerView } from '@/components/reasoner-view';
 import ReactMarkdown from 'react-markdown';
 
 export function ChatInterface() {
@@ -77,7 +77,7 @@ export function ChatInterface() {
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: synthesis,
-        reasoning_content: analyses.map(a => 
+        reasoning_content: analyses.map(a =>
           `### ${a.reasoner.emoji} ${a.reasoner.name}\n\n${a.analysis}`
         ).join('\n\n'),
         timestamp: Date.now()
@@ -179,7 +179,7 @@ export function ChatInterface() {
                 {message.role === 'user' ? '👤 You' : '🤖 Assistant'}
               </div>
               {message.role === 'assistant' && message.reasoning_content ? (
-                <ReasonerView 
+                <ReasonerView
                   content={message.content}
                   reasoningContent={message.reasoning_content}
                 />
