@@ -272,7 +272,7 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
         </Button>
       </div>
 
-      <div ref={scrollAreaRef} className="flex-1 p-4 overflow-y-auto">
+      <div ref={scrollAreaRef} className="flex-1 p-4 overflow-y-auto h-[calc(100vh-200px)]">
         {messages.map((message) => (
           <Card 
             key={message.timestamp} 
