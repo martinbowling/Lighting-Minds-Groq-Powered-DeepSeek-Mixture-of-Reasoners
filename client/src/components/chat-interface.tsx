@@ -99,8 +99,8 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
       const reasonerList = await groq.getReasoners(input, (content) => {
         setMessages(prev => [
           ...prev.slice(0, -1),
-          { 
-            ...statusMessage, 
+          {
+            ...statusMessage,
             content: '🔍 Choosing perspectives...\n\n' + content
           }
         ]);
@@ -246,21 +246,27 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
   const handleExport = () => {
     const exportData = {
       messages,
-      exportDate: new Date().toISOString()
+      exportDate: new Date().toISOString(),
+      version: '1.0'
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `chat-history-${new Date().toISOString()}.json`;
+    a.download = `mind-mosaic-chat-${new Date().toISOString()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    toast({
+      title: "Export Successful",
+      description: "Your chat history has been exported successfully"
+    });
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -268,24 +274,50 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
     reader.onload = async (event) => {
       try {
         const importData = JSON.parse(event.target?.result as string);
-        const newMessages = importData.messages;
+
+        if (!Array.isArray(importData.messages)) {
+          throw new Error("Invalid file format: messages array not found");
+        }
+
+        // Validate each message has required fields
+        const validMessages = importData.messages.every((msg: any) =>
+          msg.role && msg.content && msg.timestamp && msg.chatId
+        );
+
+        if (!validMessages) {
+          throw new Error("Invalid file format: messages are missing required fields");
+        }
+
+        // Generate new chatId for imported messages
+        const newChatId = crypto.randomUUID();
+        const newMessages = importData.messages.map((msg: ChatMessage) => ({
+          ...msg,
+          chatId: newChatId,
+          id: undefined // Allow DB to generate new IDs
+        }));
 
         // Add all imported messages to IndexedDB
         for (const msg of newMessages) {
           await db.addMessage(msg);
         }
 
-        // Update state
+        // Update state with imported messages
         setMessages(prev => [...prev, ...newMessages]);
+
+        // Notify parent of new chat
+        onChatCreated?.(newChatId);
 
         toast({
           title: "Import Successful",
           description: `Imported ${newMessages.length} messages`
         });
+
+        // Clear the file input
+        e.target.value = '';
       } catch (error) {
         toast({
           title: "Import Failed",
-          description: "Invalid file format",
+          description: error instanceof Error ? error.message : "Invalid file format",
           variant: "destructive"
         });
       }
@@ -315,8 +347,8 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
 
       <div ref={scrollAreaRef} className="flex-1 p-4 overflow-y-auto pb-24">
         {messages.map((message) => (
-          <Card 
-            key={message.timestamp} 
+          <Card
+            key={message.timestamp}
             className={cn(
               "mb-4 relative group max-w-[80%]",
               message.role === 'user' ? 'ml-auto' : 'mr-auto'
