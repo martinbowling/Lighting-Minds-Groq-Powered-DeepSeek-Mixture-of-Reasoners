@@ -17,18 +17,26 @@ import { useToast } from '@/hooks/use-toast';
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string>();
   const { toast } = useToast();
 
   useEffect(() => {
     // Load all messages initially
     db.getMessages().then((msgs) => {
       setAllMessages(msgs);
-      setMessages(msgs);
+      if (msgs.length > 0) {
+        // Get the most recent chat
+        const latestChatId = msgs[msgs.length - 1].chatId;
+        setCurrentChatId(latestChatId);
+        // Filter messages for the latest chat
+        setMessages(msgs.filter(m => m.chatId === latestChatId));
+      }
     });
   }, []);
 
   const handleNewChat = async () => {
     setMessages([]);
+    setCurrentChatId(undefined);
   };
 
   const handleClearChats = async () => {
@@ -36,6 +44,7 @@ export default function Home() {
       await db.clearMessages();
       setMessages([]);
       setAllMessages([]);
+      setCurrentChatId(undefined);
       toast({
         title: "Success",
         description: "All chats have been cleared"
@@ -49,8 +58,43 @@ export default function Home() {
     }
   };
 
-  const handleLoadChat = (chatMessages: ChatMessage[]) => {
-    setMessages(chatMessages);
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      await db.deleteChat(chatId);
+      setAllMessages(prev => prev.filter(m => m.chatId !== chatId));
+      if (currentChatId === chatId) {
+        setMessages([]);
+        setCurrentChatId(undefined);
+      }
+      toast({
+        title: "Success",
+        description: "Chat has been deleted"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete chat",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleLoadChat = async (chatId: string) => {
+    try {
+      const chatMessages = await db.getMessagesByChat(chatId);
+      setMessages(chatMessages);
+      setCurrentChatId(chatId);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load chat",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleChatCreated = (chatId: string) => {
+    setCurrentChatId(chatId);
   };
 
   return (
@@ -59,6 +103,7 @@ export default function Home() {
         messages={allMessages}
         onNewChat={handleNewChat}
         onClearChats={handleClearChats}
+        onDeleteChat={handleDeleteChat}
         onLoadChat={handleLoadChat}
         className="hidden md:block"
       />
@@ -89,19 +134,19 @@ export default function Home() {
 
           <Card className="flex-1 bg-background border overflow-hidden">
             <ChatInterface 
-              messages={messages} 
+              messages={messages}
+              chatId={currentChatId}
+              onChatCreated={handleChatCreated}
               setMessages={(newMessages) => {
                 setMessages(newMessages);
                 // Only update allMessages when newMessages is an array
                 if (Array.isArray(newMessages)) {
                   setAllMessages(prev => [
-                    ...prev, 
-                    ...newMessages.filter(msg => 
-                      !prev.some(p => p.timestamp === msg.timestamp)
-                    )
+                    ...prev.filter(m => m.chatId !== currentChatId), 
+                    ...newMessages
                   ]);
                 }
-              }} 
+              }}
             />
           </Card>
         </div>

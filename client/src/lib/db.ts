@@ -5,6 +5,7 @@ type Settings = {
 
 type ChatMessage = {
   id?: string;
+  chatId: string; // Add chatId to group messages
   role: 'user' | 'assistant';
   content: string;
   reasoning_content?: string;
@@ -24,7 +25,7 @@ class Database {
     if (this.initialized) return;
 
     return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('chatbot_db', 2);
+      const request = indexedDB.open('chatbot_db', 3); // Bump version for new schema
 
       request.onerror = () => reject(request.error);
 
@@ -50,6 +51,7 @@ class Database {
           autoIncrement: true 
         });
         messagesStore.createIndex('by_timestamp', 'timestamp');
+        messagesStore.createIndex('by_chat_id', 'chatId');
       };
     });
   }
@@ -97,6 +99,19 @@ class Database {
     });
   }
 
+  async getMessagesByChat(chatId: string): Promise<ChatMessage[]> {
+    await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction('messages', 'readonly');
+      const store = transaction.objectStore('messages');
+      const index = store.index('by_chat_id');
+      const request = index.getAll(chatId);
+
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   async addMessage(message: ChatMessage): Promise<void> {
     await this.init();
     return new Promise((resolve, reject) => {
@@ -121,6 +136,47 @@ class Database {
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteChat(chatId: string): Promise<void> {
+    await this.init();
+    const messages = await this.getMessagesByChat(chatId);
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction('messages', 'readwrite');
+      const store = transaction.objectStore('messages');
+
+      let completed = 0;
+      let errors = 0;
+
+      messages.forEach((message) => {
+        if (!message.id) return;
+        const request = store.delete(message.id);
+
+        request.onsuccess = () => {
+          completed++;
+          if (completed + errors === messages.length) {
+            if (errors > 0) {
+              reject(new Error(`Failed to delete ${errors} messages`));
+            } else {
+              resolve();
+            }
+          }
+        };
+
+        request.onerror = () => {
+          errors++;
+          if (completed + errors === messages.length) {
+            reject(new Error(`Failed to delete ${errors} messages`));
+          }
+        };
+      });
+
+      // If no messages to delete, resolve immediately
+      if (messages.length === 0) {
+        resolve();
+      }
     });
   }
 

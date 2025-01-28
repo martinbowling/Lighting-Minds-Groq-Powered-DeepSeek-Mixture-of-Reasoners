@@ -21,38 +21,46 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+interface ChatMessage {
+  chatId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+}
+
 interface ChatSidebarProps {
   onNewChat: () => void;
   onClearChats: () => void;
-  onLoadChat?: (messages: Array<{
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: number;
-  }>) => void;
-  messages: Array<{
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: number;
-  }>;
+  onDeleteChat?: (chatId: string) => void;
+  onLoadChat?: (chatId: string) => void;
+  messages: Array<ChatMessage>;
   className?: string;
 }
 
-export function ChatSidebar({ onNewChat, onClearChats, onLoadChat, messages, className }: ChatSidebarProps) {
+export function ChatSidebar({ 
+  onNewChat, 
+  onClearChats, 
+  onDeleteChat,
+  onLoadChat, 
+  messages, 
+  className 
+}: ChatSidebarProps) {
   const [open, setOpen] = useState(false);
 
-  // Group messages by conversation based on timestamps
-  const conversations = messages.reduce((acc, message) => {
-    const date = new Date(message.timestamp);
-    const key = date.toLocaleDateString();
+  // Group messages by chat ID and get the first user message as the title
+  const chats = messages.reduce((acc, message) => {
+    if (!message.chatId) return acc;
 
-    if (!acc[key]) {
-      acc[key] = [];
+    if (!acc[message.chatId]) {
+      acc[message.chatId] = {
+        title: message.role === 'user' ? message.content : 'New Chat',
+        messages: [],
+        timestamp: message.timestamp
+      };
     }
-    if (message.role === 'user') {
-      acc[key].push(message);
-    }
+    acc[message.chatId].messages.push(message);
     return acc;
-  }, {} as Record<string, typeof messages>);
+  }, {} as Record<string, { title: string, messages: typeof messages, timestamp: number }>);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -111,28 +119,56 @@ export function ChatSidebar({ onNewChat, onClearChats, onLoadChat, messages, cla
 
           <ScrollArea className="flex-1">
             <div className="p-4 space-y-4">
-              {Object.entries(conversations).reverse().map(([date, messages]) => (
-                <div key={date} className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground">
-                    {date}
-                  </h3>
-                  {messages.map((message) => (
-                    <div 
-                      key={message.timestamp}
-                      className="text-sm truncate text-muted-foreground hover:text-foreground cursor-pointer p-2 rounded-md hover:bg-accent"
-                      onClick={() => {
-                        // Find all messages from this conversation
-                        const conversation = messages.filter(msg => {
-                          const msgDate = new Date(msg.timestamp).toLocaleDateString();
-                          return msgDate === date;
-                        });
-                        onLoadChat?.(conversation);
-                        setOpen(false);
-                      }}
-                    >
-                      {message.content}
-                    </div>
-                  ))}
+              {Object.entries(chats)
+                .sort(([,a], [,b]) => b.timestamp - a.timestamp)
+                .map(([chatId, chat]) => (
+                <div key={chatId} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-muted-foreground">
+                      {new Date(chat.timestamp).toLocaleDateString()}
+                    </h3>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete this chat
+                            and all its messages.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => {
+                              onDeleteChat?.(chatId);
+                              setOpen(false);
+                            }}
+                          >
+                            Delete Chat
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  <div 
+                    className="text-sm truncate text-muted-foreground hover:text-foreground cursor-pointer p-2 rounded-md hover:bg-accent"
+                    onClick={() => {
+                      onLoadChat?.(chatId);
+                      setOpen(false);
+                    }}
+                  >
+                    {chat.title}
+                  </div>
                 </div>
               ))}
             </div>

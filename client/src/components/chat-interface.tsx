@@ -25,13 +25,16 @@ interface StreamingMessage extends ChatMessage {
 interface ChatInterfaceProps {
   messages: StreamingMessage[];
   setMessages: React.Dispatch<React.SetStateAction<StreamingMessage[]>>;
+  chatId?: string;
+  onChatCreated?: (chatId: string) => void;
 }
 
-export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
+export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const currentChatId = useRef(chatId || crypto.randomUUID());
 
   const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
@@ -40,7 +43,6 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
     }
   }, []);
 
-  // Auto-scroll when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
@@ -65,11 +67,17 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
         apiKey: settings.apiKey,
       });
 
+      // If this is a new chat, notify parent
+      if (!chatId) {
+        onChatCreated?.(currentChatId.current);
+      }
+
       // Add user message
       const userMessage: ChatMessage = {
         role: 'user',
         content: input,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        chatId: currentChatId.current
       };
       await db.addMessage(userMessage);
       setMessages(prev => [...prev, userMessage]);
@@ -79,7 +87,8 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
       const statusMessage: StreamingMessage = {
         role: 'assistant',
         content: '🔍 Analyzing your question...',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        chatId: currentChatId.current
       };
       await db.addMessage(statusMessage);
       setMessages(prev => [...prev, statusMessage]);
@@ -116,7 +125,8 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
           role: 'assistant',
           content: `### ${reasoner.emoji} ${reasoner.name}'s Analysis\n\nAnalyzing...`,
           timestamp: Date.now(),
-          isComplete: false
+          isComplete: false,
+          chatId: currentChatId.current
         };
         setMessages(prev => [...prev, analysisMessage]);
 
@@ -160,7 +170,8 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
         timestamp: Date.now(),
         reasoning_content: analyses.map(a =>
           `### ${a.reasoner.emoji} ${a.reasoner.name}\n\n${a.analysis}`
-        ).join('\n\n')
+        ).join('\n\n'),
+        chatId: currentChatId.current
       };
       setMessages(prev => [...prev, synthesisMessage]);
 
@@ -183,7 +194,10 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
       for (const msg of messages) {
         if (!msg.id) { // Only save messages that haven't been saved yet
           try {
-            await db.addMessage(msg);
+            await db.addMessage({
+              ...msg,
+              chatId: currentChatId.current
+            });
           } catch (error) {
             console.error('Error saving message:', error);
           }
