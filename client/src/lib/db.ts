@@ -1,6 +1,5 @@
 export interface Settings {
   apiKey: string;
-  apiUrl: string;
   showReasoningContent: boolean;
 }
 
@@ -59,7 +58,6 @@ class Database {
       request.onsuccess = () => {
         resolve(request.result || {
           apiKey: '',
-          apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
           showReasoningContent: false
         });
       };

@@ -39,7 +39,6 @@ export function ChatInterface() {
     try {
       const groq = new GroqClient({
         apiKey: settings.apiKey,
-        apiUrl: settings.apiUrl
       });
 
       // Add user message

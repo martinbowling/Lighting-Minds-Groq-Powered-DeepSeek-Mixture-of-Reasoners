@@ -10,7 +10,6 @@ import { db, type Settings } from '@/lib/db';
 export function SettingsPanel() {
   const [settings, setSettings] = useState<Settings>({
     apiKey: '',
-    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
     showReasoningContent: false
   });
   const { toast } = useToast();
@@ -49,15 +48,6 @@ export function SettingsPanel() {
             value={settings.apiKey}
             onChange={e => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
             placeholder="sk_..."
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="apiUrl">API URL</Label>
-          <Input
-            id="apiUrl"
-            value={settings.apiUrl}
-            onChange={e => setSettings(prev => ({ ...prev, apiUrl: e.target.value }))}
           />
         </div>
 
