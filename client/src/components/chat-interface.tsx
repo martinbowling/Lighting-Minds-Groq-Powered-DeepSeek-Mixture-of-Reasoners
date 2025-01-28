@@ -1,15 +1,21 @@
-import { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Download, Upload } from 'lucide-react';
+import { Send, Download, Upload, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ChatMessage, Reasoner } from '@/lib/db';
 import { db } from '@/lib/db';
 import { GroqClient } from '@/lib/groq';
 import { ReasonerView } from '@/components/reasoner-view';
 import ReactMarkdown from 'react-markdown';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface StreamingMessage extends ChatMessage {
   isComplete?: boolean;
@@ -243,10 +249,34 @@ export function ChatInterface() {
 
       <ScrollArea className="flex-1 p-4">
         {messages.map((message) => (
-          <Card key={message.timestamp} className="mb-4">
+          <Card key={message.timestamp} className="mb-4 relative group">
             <CardContent className="p-4">
-              <div className="font-semibold mb-2">
-                {message.role === 'user' ? '👤 You' : '🤖 Assistant'}
+              <div className="font-semibold mb-2 flex justify-between items-center">
+                <span>{message.role === 'user' ? '👤 You' : '🤖 Assistant'}</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => {
+                          const text = message.reasoning_content || message.content;
+                          navigator.clipboard.writeText(text);
+                          toast({
+                            title: "Copied",
+                            description: "Message content copied to clipboard",
+                          });
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Copy message</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               {message.role === 'assistant' && message.reasoning_content ? (
                 <ReasonerView
