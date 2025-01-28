@@ -5,14 +5,18 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Send, Download, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { ChatMessage } from '@/lib/db';
+import type { ChatMessage, Reasoner } from '@/lib/db';
 import { db } from '@/lib/db';
 import { GroqClient } from '@/lib/groq';
 import { ReasonerView } from '@/components/reasoner-view';
 import ReactMarkdown from 'react-markdown';
 
+interface StreamingMessage extends ChatMessage {
+  isComplete?: boolean;
+}
+
 export function ChatInterface() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<StreamingMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -50,90 +54,111 @@ export function ChatInterface() {
       await db.addMessage(userMessage);
       setMessages(prev => [...prev, userMessage]);
 
-      // Add status message for reasoners
-      const reasonerStatusMsg: ChatMessage = {
+      // Add initial status message
+      const statusMessage: StreamingMessage = {
         role: 'assistant',
         content: '🔍 Identifying perspectives...',
         timestamp: Date.now()
       };
-      setMessages(prev => [...prev, reasonerStatusMsg]);
+      setMessages(prev => [...prev, statusMessage]);
 
       // Get reasoners with streaming updates
       const reasonerList = await groq.getReasoners(input, (content) => {
         setMessages(prev => [
           ...prev.slice(0, -1),
-          { ...reasonerStatusMsg, content: `🔍 Identifying perspectives...\n${content}` }
+          { ...statusMessage, content: `Identifying perspectives...\n${content}` }
         ]);
       });
 
-      // Collect analyses with streaming updates
-      const analyses = [];
+      // Remove the status message
+      setMessages(prev => prev.slice(0, -1));
+
+      // Process each perspective
+      const analyses: Array<{ reasoner: Reasoner; analysis: string }> = [];
+
       for (const reasoner of reasonerList) {
-        const analysisMsg: ChatMessage = {
+        // Add new message for this reasoner
+        const analysisMessage: StreamingMessage = {
           role: 'assistant',
-          content: `💭 Getting ${reasoner.emoji} ${reasoner.name}'s analysis...`,
-          timestamp: Date.now()
+          content: `### ${reasoner.emoji} ${reasoner.name}'s Analysis\n\nAnalyzing...`,
+          timestamp: Date.now(),
+          isComplete: false
         };
-        setMessages(prev => [...prev.slice(0, -1), analysisMsg]);
+        setMessages(prev => [...prev, analysisMessage]);
 
+        // Stream in the analysis
         const analysis = await groq.getReasonerAnalysis(input, reasoner, (content) => {
-          setMessages(prev => [
-            ...prev.slice(0, -1),
-            {
-              ...analysisMsg,
+          setMessages(prev => {
+            const index = prev.findIndex(m => 
+              m.timestamp === analysisMessage.timestamp
+            );
+            if (index === -1) return prev;
+
+            const newMessages = [...prev];
+            newMessages[index] = {
+              ...analysisMessage,
               content: `### ${reasoner.emoji} ${reasoner.name}'s Analysis\n\n${content}`
-            }
-          ]);
+            };
+            return newMessages;
+          });
         });
 
-        analyses.push({
-          reasoner,
-          analysis
+        // Mark message as complete
+        setMessages(prev => {
+          const index = prev.findIndex(m => m.timestamp === analysisMessage.timestamp);
+          if (index === -1) return prev;
+
+          const newMessages = [...prev];
+          newMessages[index] = {
+            ...newMessages[index],
+            isComplete: true
+          };
+          return newMessages;
         });
+
+        analyses.push({ reasoner, analysis });
       }
 
-      // Get synthesis with streaming updates
-      const synthesisMsg: ChatMessage = {
+      // Add synthesis message
+      const synthesisMessage: StreamingMessage = {
         role: 'assistant',
-        content: '🌟 Creating integrated synthesis...',
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev.slice(0, -1), synthesisMsg]);
-
-      const synthesis = await groq.synthesizeResponses(input, analyses, (content) => {
-        setMessages(prev => [
-          ...prev.slice(0, -1),
-          {
-            ...synthesisMsg,
-            content: content,
-            reasoning_content: analyses.map(a =>
-              `### ${a.reasoner.emoji} ${a.reasoner.name}\n\n${a.analysis}`
-            ).join('\n\n')
-          }
-        ]);
-      });
-
-      // Save final message
-      const finalMessage: ChatMessage = {
-        role: 'assistant',
-        content: synthesis,
+        content: '# 🌟 Integrated Synthesis\n\nSynthesizing perspectives...',
+        timestamp: Date.now(),
         reasoning_content: analyses.map(a =>
           `### ${a.reasoner.emoji} ${a.reasoner.name}\n\n${a.analysis}`
-        ).join('\n\n'),
-        timestamp: Date.now()
+        ).join('\n\n')
       };
-      await db.addMessage(finalMessage);
-      setInput('');
+      setMessages(prev => [...prev, synthesisMessage]);
 
+      // Stream in the synthesis
+      await groq.synthesizeResponses(input, analyses, (content) => {
+        setMessages(prev => {
+          const index = prev.findIndex(m => m.timestamp === synthesisMessage.timestamp);
+          if (index === -1) return prev;
+
+          const newMessages = [...prev];
+          newMessages[index] = {
+            ...synthesisMessage,
+            content: `# 🌟 Integrated Synthesis\n\n${content}`
+          };
+          return newMessages;
+        });
+      });
+
+      // Save all messages to the database
+      for (const msg of messages) {
+        if (msg.isComplete !== false) {
+          await db.addMessage(msg);
+        }
+      }
+
+      setInput('');
     } catch (error) {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to process message",
         variant: "destructive"
       });
-
-      // Remove status message if there was an error
-      setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
     }
