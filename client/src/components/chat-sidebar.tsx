@@ -26,7 +26,7 @@ export function ChatSidebar({ onNewChat, messages, className }: ChatSidebarProps
   const conversations = messages.reduce((acc, message) => {
     const date = new Date(message.timestamp);
     const key = date.toLocaleDateString();
-    
+
     if (!acc[key]) {
       acc[key] = [];
     }
@@ -39,13 +39,13 @@ export function ChatSidebar({ onNewChat, messages, className }: ChatSidebarProps
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" size="icon" className="fixed left-4 top-4">
+        <Button variant="outline" size="icon" className="fixed left-4 top-4 z-10">
           <MessageSquare className="h-4 w-4" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className={cn("w-[300px] p-0", className)}>
-        <div className="flex flex-col h-full">
-          <div className="p-4 border-b">
+      <SheetContent side="left" className={cn("w-[300px] p-0 bg-background", className)}>
+        <div className="flex flex-col h-full border-r">
+          <div className="p-4 border-b bg-background">
             <Button 
               onClick={() => {
                 onNewChat();
@@ -57,7 +57,7 @@ export function ChatSidebar({ onNewChat, messages, className }: ChatSidebarProps
               New Chat
             </Button>
           </div>
-          
+
           <ScrollArea className="flex-1">
             <div className="p-4 space-y-4">
               {Object.entries(conversations).reverse().map(([date, messages]) => (

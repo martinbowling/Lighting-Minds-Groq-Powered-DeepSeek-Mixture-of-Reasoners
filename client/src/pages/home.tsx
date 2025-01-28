@@ -25,7 +25,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen">
+    <div className="h-screen bg-background">
       <ChatSidebar
         messages={messages}
         onNewChat={handleNewChat}
@@ -55,7 +55,7 @@ export default function Home() {
             </Dialog>
           </header>
 
-          <Card className="flex-1">
+          <Card className="flex-1 bg-background border">
             <ChatInterface />
           </Card>
         </div>
