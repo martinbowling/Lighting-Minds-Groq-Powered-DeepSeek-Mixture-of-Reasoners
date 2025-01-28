@@ -72,13 +72,15 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
         onChatCreated?.(currentChatId.current);
       }
 
-      // Add user message
+      // Add user message and save it immediately
       const userMessage: ChatMessage = {
         role: 'user',
         content: input,
         timestamp: Date.now(),
         chatId: currentChatId.current
       };
+
+      // Save user message first
       await db.addMessage(userMessage);
       setMessages(prev => [...prev, userMessage]);
       setInput('');
@@ -93,7 +95,6 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
       await db.addMessage(statusMessage);
       setMessages(prev => [...prev, statusMessage]);
 
-
       // Get reasoners with streaming updates
       const reasonerList = await groq.getReasoners(input, (content) => {
         setMessages(prev => [
@@ -106,15 +107,16 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
       });
 
       // Update status to show chosen perspectives
-      setMessages(prev => [
-        ...prev.slice(0, -1),
-        {
-          ...statusMessage,
-          content: '✨ Perspectives chosen:\n\n' + reasonerList.map(
-            r => `${r.emoji} ${r.name}`
-          ).join('\n')
-        }
-      ]);
+      const perspectivesMessage: StreamingMessage = {
+        role: 'assistant',
+        content: '✨ Perspectives chosen:\n\n' + reasonerList.map(
+          r => `${r.emoji} ${r.name}`
+        ).join('\n'),
+        timestamp: Date.now(),
+        chatId: currentChatId.current
+      };
+      await db.addMessage(perspectivesMessage);
+      setMessages(prev => [...prev.slice(0, -1), perspectivesMessage]);
 
       // Process each perspective
       const analyses: Array<{ reasoner: Reasoner; analysis: string }> = [];
@@ -128,6 +130,9 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
           isComplete: false,
           chatId: currentChatId.current
         };
+
+        // Save initial analysis message
+        await db.addMessage(analysisMessage);
         setMessages(prev => [...prev, analysisMessage]);
 
         // Stream in the analysis
@@ -147,16 +152,20 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
           });
         });
 
-        // Mark message as complete
+        // Update the analysis message with final content
+        const finalAnalysisMessage = {
+          ...analysisMessage,
+          content: `### ${reasoner.emoji} ${reasoner.name}'s Analysis\n\n${analysis}`,
+          isComplete: true,
+          chatId: currentChatId.current
+        };
+        await db.addMessage(finalAnalysisMessage);
+
         setMessages(prev => {
           const index = prev.findIndex(m => m.timestamp === analysisMessage.timestamp);
           if (index === -1) return prev;
-
           const newMessages = [...prev];
-          newMessages[index] = {
-            ...newMessages[index],
-            isComplete: true
-          };
+          newMessages[index] = finalAnalysisMessage;
           return newMessages;
         });
 
@@ -173,10 +182,15 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
         ).join('\n\n'),
         chatId: currentChatId.current
       };
+
+      // Save initial synthesis message
+      await db.addMessage(synthesisMessage);
       setMessages(prev => [...prev, synthesisMessage]);
 
       // Stream in the synthesis
+      let finalContent = '';
       await groq.synthesizeResponses(input, analyses, (content) => {
+        finalContent = content;
         setMessages(prev => {
           const index = prev.findIndex(m => m.timestamp === synthesisMessage.timestamp);
           if (index === -1) return prev;
@@ -190,19 +204,13 @@ export function ChatInterface({ messages, setMessages, chatId, onChatCreated }: 
         });
       });
 
-      // Save messages to database
-      for (const msg of messages) {
-        if (!msg.id) { // Only save messages that haven't been saved yet
-          try {
-            await db.addMessage({
-              ...msg,
-              chatId: currentChatId.current
-            });
-          } catch (error) {
-            console.error('Error saving message:', error);
-          }
-        }
-      }
+      // Save final synthesis message
+      const finalSynthesisMessage = {
+        ...synthesisMessage,
+        content: `# 🌟 Integrated Synthesis\n\n${finalContent}`,
+        chatId: currentChatId.current
+      };
+      await db.addMessage(finalSynthesisMessage);
 
       setInput('');
     } catch (error) {
