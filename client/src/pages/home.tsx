@@ -12,10 +12,12 @@ import { ChatSidebar } from '@/components/chat-sidebar';
 import { SettingsPanel } from '@/components/settings-panel';
 import { useState, useEffect } from 'react';
 import { db, type ChatMessage } from '@/lib/db';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Load all messages initially
@@ -29,6 +31,24 @@ export default function Home() {
     setMessages([]);
   };
 
+  const handleClearChats = async () => {
+    try {
+      await db.clearMessages();
+      setMessages([]);
+      setAllMessages([]);
+      toast({
+        title: "Success",
+        description: "All chats have been cleared"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to clear chats",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleLoadChat = (chatMessages: ChatMessage[]) => {
     setMessages(chatMessages);
   };
@@ -38,6 +58,7 @@ export default function Home() {
       <ChatSidebar
         messages={allMessages}
         onNewChat={handleNewChat}
+        onClearChats={handleClearChats}
         onLoadChat={handleLoadChat}
         className="hidden md:block"
       />

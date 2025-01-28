@@ -8,10 +8,22 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ChatSidebarProps {
   onNewChat: () => void;
+  onClearChats: () => void;
   onLoadChat?: (messages: Array<{
     role: 'user' | 'assistant';
     content: string;
@@ -25,7 +37,7 @@ interface ChatSidebarProps {
   className?: string;
 }
 
-export function ChatSidebar({ onNewChat, onLoadChat, messages, className }: ChatSidebarProps) {
+export function ChatSidebar({ onNewChat, onClearChats, onLoadChat, messages, className }: ChatSidebarProps) {
   const [open, setOpen] = useState(false);
 
   // Group messages by conversation based on timestamps
@@ -51,7 +63,7 @@ export function ChatSidebar({ onNewChat, onLoadChat, messages, className }: Chat
       </SheetTrigger>
       <SheetContent side="left" className={cn("w-[300px] p-0 bg-background", className)}>
         <div className="flex flex-col h-full border-r">
-          <div className="p-4 border-b bg-background">
+          <div className="p-4 border-b bg-background space-y-2">
             <Button 
               onClick={() => {
                 onNewChat();
@@ -62,6 +74,39 @@ export function ChatSidebar({ onNewChat, onLoadChat, messages, className }: Chat
               <PlusCircle className="h-4 w-4 mr-2" />
               New Chat
             </Button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="outline"
+                  className="w-full text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear All Chats
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete all your
+                    chat history.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => {
+                      onClearChats();
+                      setOpen(false);
+                    }}
+                  >
+                    Delete All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           <ScrollArea className="flex-1">

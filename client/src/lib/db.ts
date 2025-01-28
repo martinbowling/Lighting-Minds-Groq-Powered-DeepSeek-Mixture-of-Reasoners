@@ -1,17 +1,17 @@
-export interface Settings {
+type Settings = {
   apiKey: string;
   showReasoningContent: boolean;
 }
 
-export interface ChatMessage {
+type ChatMessage = {
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
   reasoning_content?: string;
   timestamp: number;
-  id?: string;
 }
 
-export interface Reasoner {
+type Reasoner = {
   emoji: string;
   name: string;
 }
@@ -138,3 +138,4 @@ class Database {
 }
 
 export const db = new Database();
+export type { Settings, ChatMessage, Reasoner };
