@@ -124,9 +124,9 @@ export default function Home() {
         <div className="h-full flex flex-col">
           <header className="flex justify-between items-center p-4">
             <div>
-              <h1 className="text-3xl font-bold">🧠 Mind Mosaic</h1>
+              <h1 className="text-3xl font-bold">⚡ Lightning Minds</h1>
               <p className="text-muted-foreground">
-                Dynamic Multi-Perspective Analysis Engine
+                Groq Powered Multi Perspective Reasoning Engine
               </p>
             </div>
 
