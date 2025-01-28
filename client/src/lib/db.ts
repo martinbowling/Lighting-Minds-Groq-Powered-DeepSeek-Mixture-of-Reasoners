@@ -24,7 +24,7 @@ class Database {
     if (this.initialized) return;
 
     return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('chatbot_db', 2); // Bump version to trigger upgrade
+      const request = indexedDB.open('chatbot_db', 2);
 
       request.onerror = () => reject(request.error);
 
@@ -41,7 +41,6 @@ class Database {
           db.createObjectStore('settings');
         }
 
-        // Recreate messages store with composite key
         if (db.objectStoreNames.contains('messages')) {
           db.deleteObjectStore('messages');
         }
@@ -93,7 +92,7 @@ class Database {
       const index = store.index('by_timestamp');
       const request = index.getAll();
 
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);
     });
   }
@@ -103,7 +102,22 @@ class Database {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction('messages', 'readwrite');
       const store = transaction.objectStore('messages');
-      const request = store.add(message);
+      const request = store.add({
+        ...message,
+        timestamp: message.timestamp || Date.now()
+      });
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteMessage(id: string): Promise<void> {
+    await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction('messages', 'readwrite');
+      const store = transaction.objectStore('messages');
+      const request = store.delete(id);
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);

@@ -2,7 +2,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Download, Upload, Copy } from 'lucide-react';
+import { Send, Download, Upload, Copy, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ChatMessage, Reasoner } from '@/lib/db';
 import { db } from '@/lib/db';
@@ -73,6 +73,7 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
       };
       await db.addMessage(userMessage);
       setMessages(prev => [...prev, userMessage]);
+      setInput('');
 
       // Add initial status message
       const statusMessage: StreamingMessage = {
@@ -80,7 +81,9 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
         content: '🔍 Analyzing your question...',
         timestamp: Date.now()
       };
+      await db.addMessage(statusMessage);
       setMessages(prev => [...prev, statusMessage]);
+
 
       // Get reasoners with streaming updates
       const reasonerList = await groq.getReasoners(input, (content) => {
@@ -176,14 +179,11 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
         });
       });
 
-      // Save all messages to the database
+      // Save messages to database
       for (const msg of messages) {
-        if (msg.isComplete !== false) {
+        if (!msg.id) { // Only save messages that haven't been saved yet
           try {
-            await db.addMessage({
-              ...msg,
-              timestamp: msg.timestamp || Date.now()
-            });
+            await db.addMessage(msg);
           } catch (error) {
             console.error('Error saving message:', error);
           }
@@ -199,6 +199,25 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteMessage = async (message: ChatMessage) => {
+    if (!message.id) return;
+
+    try {
+      await db.deleteMessage(message.id);
+      setMessages(prev => prev.filter(msg => msg.id !== message.id));
+      toast({
+        title: "Message Deleted",
+        description: "Message was successfully removed"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete message",
+        variant: "destructive"
+      });
     }
   };
 
@@ -287,30 +306,50 @@ export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
             )}>
               <div className="font-semibold mb-2 flex justify-between items-center">
                 <span>{message.role === 'user' ? '👤 You' : '🤖 Assistant'}</span>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => {
-                          const text = message.reasoning_content || message.content;
-                          navigator.clipboard.writeText(text);
-                          toast({
-                            title: "Copied",
-                            description: "Message content copied to clipboard",
-                          });
-                        }}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Copy message</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <div className="flex items-center gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => {
+                            const text = message.reasoning_content || message.content;
+                            navigator.clipboard.writeText(text);
+                            toast({
+                              title: "Copied",
+                              description: "Message content copied to clipboard",
+                            });
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Copy message</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
+                          onClick={() => handleDeleteMessage(message)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Delete message</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </div>
               {message.role === 'assistant' && message.reasoning_content ? (
                 <ReasonerView
