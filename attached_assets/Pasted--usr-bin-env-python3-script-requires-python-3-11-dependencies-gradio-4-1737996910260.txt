@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "gradio>=4.19.2",
+#     "groq>=0.5.0",
+#     "python-dotenv>=1.0.0",
+# ]
+# ///
+
+import gradio as gr
+import asyncio
+import os
+from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ENV_GROQ_KEY = os.getenv("GROQ_API_KEY", "")
+reasoners_history = []
+
+async def get_reasoners(message, groq_key):
+    """Get reasoners with emojis from LLM"""
+    client = Groq(api_key=groq_key)
+    prompt = f"""For this question: "{message}", suggest 3-4 analysis perspectives. 
+Return format: "EMOJI PerspectiveName, EMOJI PerspectiveName". 
+Examples: 
+- 🔬 Materials Scientist, ⚖️ Ethicist, 🌍 Environmental Economist
+- 🤖 AI Safety Researcher, 📜 Historian, 💼 Policy Maker"""
+
+    response = client.chat.completions.create(
+        model="deepseek-r1-distill-llama-70b",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=150
+    )
+    
+    raw_text = response.choices[0].message.content
+    entries = [e.strip() for e in raw_text.split(',')]
+    
+    parsed = []
+    for entry in entries:
+        if ' ' in entry:
+            emoji = entry[0]
+            name = entry[1:].strip()
+            parsed.append({"emoji": emoji, "name": name})
+        else:
+            parsed.append({"emoji": "🧠", "name": entry})
+    
+    return parsed[:4]  # Return max 4 perspectives
+
+async def get_reasoned_response(client, message, reasoner):
+    """Get response for a specific reasoner"""
+    prompt = f"""As {reasoner['emoji']} {reasoner['name']}, analyze:
+{message}
+
+Structure:
+1. Core principles
+2. Analysis approach
+3. Key insights
+4. Potential blindspots
+
+Keep response under 500 words."""
+    
+    response = client.chat.completions.create(
+        model="deepseek-r1-distill-llama-70b",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=4096,
+        stream=True
+    )
+    
+    analysis = ""
+    for chunk in response:
+        if chunk.choices[0].delta.content:
+            analysis += chunk.choices[0].delta.content
+            yield analysis
+
+async def synthesize_responses(client, message, responses):
+    """Create integrated analysis"""
+    perspectives = "\n".join(
+        f"{r['reasoner']['emoji']} **{r['reasoner']['name']}**: {r['analysis']}"
+        for r in responses
+    )
+    
+    prompt = f"""Synthesize these perspectives on "{message}":\n\n{perspectives}\n\n
+Create integrated analysis that:
+1. Identifies common ground
+2. Highlights key differences
+3. Notes critical insights
+4. Proposes balanced conclusions
+Use markdown with emojis for section headers."""
+    
+    response = client.chat.completions.create(
+        model="deepseek-r1-distill-llama-70b",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.5,
+        max_tokens=4096,
+        stream=True
+    )
+    
+    synthesis = ""
+    for chunk in response:
+        if chunk.choices[0].delta.content:
+            synthesis += chunk.choices[0].delta.content
+            yield synthesis
+
+async def process_query(message, groq_key):
+    """Full processing pipeline"""
+    client = Groq(api_key=groq_key)
+    
+    print("🔍 DEBUG: Starting analysis pipeline")
+    
+    # Get reasoners with emojis
+    print("🔍 DEBUG: Getting reasoners...")
+    reasoners = await get_reasoners(message, groq_key)
+    print(f"🔍 DEBUG: Got {len(reasoners)} reasoners: {[r['name'] for r in reasoners]}")
+    reasoners_history.append(reasoners)
+    
+    # Initial status message
+    yield {"role": "assistant", "content": "🔍 Identifying perspectives...\n\n"}
+    
+    # Process each perspective
+    responses = []
+    for i, reasoner in enumerate(reasoners, 1):
+        print(f"💭 DEBUG: Starting analysis for {reasoner['name']} ({i}/{len(reasoners)})")
+        
+        # Status message for current perspective
+        current_response = f"### {reasoner['emoji']} {reasoner['name']}'s Analysis\n\n"
+        yield {"role": "assistant", "content": current_response}
+        history_index = len(responses) + 1  # +1 for the initial status message
+        
+        # Stream in the analysis
+        async for chunk in get_reasoned_response(client, message, reasoner):
+            current_response = f"### {reasoner['emoji']} {reasoner['name']}'s Analysis\n\n{chunk}"
+            yield {"role": "assistant", "content": current_response}
+        
+        print(f"💭 DEBUG: Completed analysis for {reasoner['name']} (length: {len(chunk)} chars)")
+        
+        # Store complete response
+        responses.append({
+            "reasoner": reasoner,
+            "analysis": chunk
+        })
+    
+    # Generate synthesis
+    print("🔄 DEBUG: Starting synthesis...")
+    current_synthesis = "# 🌟 Integrated Synthesis\n\n"
+    yield {"role": "assistant", "content": current_synthesis}
+    
+    async for chunk in synthesize_responses(client, message, responses):
+        current_synthesis = "# 🌟 Integrated Synthesis\n\n" + chunk
+        yield {"role": "assistant", "content": current_synthesis}
+    
+    print(f"🔄 DEBUG: Completed synthesis (length: {len(chunk)} chars)")
+
+async def chat_fn(message, history, groq_key):
+    """Main chat interface"""
+    active_groq_key = ENV_GROQ_KEY or groq_key
+    history = history or []
+    
+    print("\n🤖 DEBUG: Starting new chat interaction")
+    print(f"🤖 DEBUG: Message length: {len(message)} chars")
+    
+    if not active_groq_key:
+        yield {"role": "assistant", "content": "🔑 Please configure your Groq API key!"}
+        return
+    
+    try:
+        # Add user message to history
+        history.append({"role": "user", "content": message})
+        yield history
+        
+        # Process the query and update history with each response
+        current_perspective = None
+        current_synthesis = None
+        
+        async for response in process_query(message, active_groq_key):
+            # Update the last message if it's from the same perspective
+            if "Analysis" in response["content"] and current_perspective:
+                history[-1] = response
+            elif "Synthesis" in response["content"] and current_synthesis:
+                history[-1] = response
+            else:
+                history.append(response)
+                if "Analysis" in response["content"]:
+                    current_perspective = response
+                elif "Synthesis" in response["content"]:
+                    current_synthesis = response
+                else:
+                    current_perspective = None
+                    current_synthesis = None
+            
+            yield history
+    
+    except Exception as e:
+        import traceback
+        error = f"🚨 Error: {str(e)}\n```\n{traceback.format_exc()}\n```"
+        print(f"❌ DEBUG: Error occurred:\n{error}")
+        history.append({"role": "assistant", "content": error})
+        yield history
+
+def create_demo():
+    """Create Gradio interface"""
+    demo = gr.Blocks(title="🧠 Mind Mosaic", theme=gr.themes.Soft())
+    
+    with demo:
+        gr.Markdown("# 🧠 Mind Mosaic")
+        gr.Markdown("Dynamic Multi-Perspective Analysis Engine")
+        
+        with gr.Accordion("⚙️ Settings", open=False):
+            api_key = gr.Textbox(
+                label="Groq API Key",
+                type="password",
+                value=ENV_GROQ_KEY or "",
+                placeholder="sk_..."
+            )
+        
+        gr.ChatInterface(
+            chat_fn,
+            additional_inputs=[api_key],
+            examples=[
+                ["How should we approach AI regulation?"],
+                ["What's the best strategy for renewable energy adoption?"],
+                ["Should genetic engineering be used in human enhancement?"]
+            ]
+        )
+    
+    return demo
+
+def main():
+    if not os.path.exists(".env"):
+        with open(".env", "w") as f:
+            f.write("GROQ_API_KEY=\n")
+    
+    demo = create_demo()
+    demo.queue().launch()
+
+if __name__ == "__main__":
+    main()
