@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogTrigger,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import { ChatInterface } from '@/components/chat-interface';
 import { ChatSidebar } from '@/components/chat-sidebar';
@@ -24,16 +25,21 @@ export default function Home() {
     setMessages([]);
   };
 
+  const handleLoadChat = (chatMessages: ChatMessage[]) => {
+    setMessages(chatMessages);
+  };
+
   return (
     <div className="h-screen bg-background">
       <ChatSidebar
         messages={messages}
         onNewChat={handleNewChat}
+        onLoadChat={handleLoadChat}
         className="hidden md:block"
       />
 
       <main className="h-full md:pl-[300px]">
-        <div className="container mx-auto p-4 h-full flex flex-col">
+        <div className="container max-w-5xl mx-auto p-4 h-full flex flex-col">
           <header className="flex justify-between items-center mb-4">
             <div>
               <h1 className="text-3xl font-bold">🧠 Mind Mosaic</h1>
@@ -50,13 +56,14 @@ export default function Home() {
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
+                <DialogTitle>Settings</DialogTitle>
                 <SettingsPanel />
               </DialogContent>
             </Dialog>
           </header>
 
           <Card className="flex-1 bg-background border">
-            <ChatInterface />
+            <ChatInterface messages={messages} setMessages={setMessages} />
           </Card>
         </div>
       </main>

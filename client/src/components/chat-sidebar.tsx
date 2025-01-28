@@ -1,16 +1,22 @@
 import { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, MessageSquare } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { PlusCircle } from 'lucide-react';
 
 interface ChatSidebarProps {
   onNewChat: () => void;
+  onLoadChat?: (messages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+  }>) => void;
   messages: Array<{
     role: 'user' | 'assistant';
     content: string;
@@ -19,8 +25,8 @@ interface ChatSidebarProps {
   className?: string;
 }
 
-export function ChatSidebar({ onNewChat, messages, className }: ChatSidebarProps) {
-  const [open, setOpen] = useState(true);
+export function ChatSidebar({ onNewChat, onLoadChat, messages, className }: ChatSidebarProps) {
+  const [open, setOpen] = useState(false);
 
   // Group messages by conversation based on timestamps
   const conversations = messages.reduce((acc, message) => {
@@ -40,7 +46,7 @@ export function ChatSidebar({ onNewChat, messages, className }: ChatSidebarProps
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button variant="outline" size="icon" className="fixed left-4 top-4 z-10">
-          <MessageSquare className="h-4 w-4" />
+          <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className={cn("w-[300px] p-0 bg-background", className)}>
@@ -69,6 +75,15 @@ export function ChatSidebar({ onNewChat, messages, className }: ChatSidebarProps
                     <div 
                       key={message.timestamp}
                       className="text-sm truncate text-muted-foreground hover:text-foreground cursor-pointer p-2 rounded-md hover:bg-accent"
+                      onClick={() => {
+                        // Find all messages from this conversation
+                        const conversation = messages.filter(msg => {
+                          const msgDate = new Date(msg.timestamp).toLocaleDateString();
+                          return msgDate === date;
+                        });
+                        onLoadChat?.(conversation);
+                        setOpen(false);
+                      }}
                     >
                       {message.content}
                     </div>

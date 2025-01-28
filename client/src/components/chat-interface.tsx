@@ -21,15 +21,15 @@ interface StreamingMessage extends ChatMessage {
   isComplete?: boolean;
 }
 
-export function ChatInterface() {
-  const [messages, setMessages] = useState<StreamingMessage[]>([]);
+interface ChatInterfaceProps {
+  messages: StreamingMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<StreamingMessage[]>>;
+}
+
+export function ChatInterface({ messages, setMessages }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    db.getMessages().then(setMessages);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
