@@ -3,7 +3,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send } from 'lucide-react';
+import { Send, Download, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ChatMessage } from '@/lib/db';
 import { db } from '@/lib/db';
@@ -36,20 +36,33 @@ export function ChatInterface() {
     }
 
     setLoading(true);
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: input,
-      timestamp: Date.now()
-    };
-
     try {
       const groq = new GroqClient({
         apiKey: settings.apiKey,
         apiUrl: settings.apiUrl
       });
 
+      // Add user message
+      const userMessage: ChatMessage = {
+        role: 'user',
+        content: input,
+        timestamp: Date.now()
+      };
+      await db.addMessage(userMessage);
+      setMessages(prev => [...prev, userMessage]);
+
+      // Add status message
+      const statusMessage: ChatMessage = {
+        role: 'assistant',
+        content: '🔍 Analyzing from multiple perspectives...',
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, statusMessage]);
+
       // Get reasoners
       const reasoners = await groq.getReasoners(input);
+
+      // Get analysis from each reasoner
       const analyses = await Promise.all(
         reasoners.map(async (reasoner) => ({
           reasoner,
@@ -60,35 +73,106 @@ export function ChatInterface() {
       // Get synthesis
       const synthesis = await groq.synthesizeResponses(input, analyses);
 
+      // Replace status message with final response
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: synthesis,
         reasoning_content: analyses.map(a => 
-          `${a.reasoner.emoji} ${a.reasoner.name}\n${a.analysis}`
+          `### ${a.reasoner.emoji} ${a.reasoner.name}\n\n${a.analysis}`
         ).join('\n\n'),
         timestamp: Date.now()
       };
 
-      await db.addMessage(userMessage);
       await db.addMessage(assistantMessage);
-      
-      setMessages(prev => [...prev, userMessage, assistantMessage]);
+      setMessages(prev => [...prev.slice(0, -1), assistantMessage]);
       setInput('');
+
     } catch (error) {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to process message",
         variant: "destructive"
       });
+
+      // Remove status message if there was an error
+      setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
     }
   };
 
+  const handleExport = () => {
+    const exportData = {
+      messages,
+      exportDate: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-history-${new Date().toISOString()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importData = JSON.parse(event.target?.result as string);
+        const newMessages = importData.messages;
+
+        // Add all imported messages to IndexedDB
+        for (const msg of newMessages) {
+          await db.addMessage(msg);
+        }
+
+        // Update state
+        setMessages(prev => [...prev, ...newMessages]);
+
+        toast({
+          title: "Import Successful",
+          description: `Imported ${newMessages.length} messages`
+        });
+      } catch (error) {
+        toast({
+          title: "Import Failed",
+          description: "Invalid file format",
+          variant: "destructive"
+        });
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="flex flex-col h-full">
+      <div className="flex justify-end gap-2 p-2 border-b">
+        <Input
+          type="file"
+          accept=".json"
+          onChange={handleImport}
+          className="hidden"
+          id="import-file"
+        />
+        <Button variant="outline" size="sm" onClick={() => document.getElementById('import-file')?.click()}>
+          <Upload className="h-4 w-4 mr-2" />
+          Import
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleExport}>
+          <Download className="h-4 w-4 mr-2" />
+          Export
+        </Button>
+      </div>
+
       <ScrollArea className="flex-1 p-4">
-        {messages.map((message, i) => (
+        {messages.map((message) => (
           <Card key={message.timestamp} className="mb-4">
             <CardContent className="p-4">
               <div className="font-semibold mb-2">
